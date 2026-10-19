@@ -6,10 +6,15 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-state
+  cancel-in-progress: false
 
 jobs:
-  terraform:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  plan:
     runs-on: ubuntu-latest
 
     env:
@@ -17,6 +22,9 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       TF_VAR_application_bucket_name: ${{ secrets.APPLICATION_BUCKET_NAME }}
+
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
 
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +37,7 @@ jobs:
       - run: terraform fmt -recursive
       - run: terraform validate
 
-      - name: Create plan
+      - name: Create Terraform plan
         id: plan
         run: |
           set +e
@@ -46,13 +54,30 @@ jobs:
           fi
 
       - name: Save plan to S3
-        if: steps.plan.outputs.changes == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
         run: aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
 
-      - name: Download plan from S3
-        if: steps.plan.outputs.changes == 'true'
+  apply:
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.plan.outputs.changes == 'true'
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - run: terraform init
+
+      - name: Download saved plan from S3
         run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
 
-      - name: Apply plan
-        if: steps.plan.outputs.changes == 'true'
+      - name: Apply Terraform plan
         run: terraform apply -auto-approve tfplan
