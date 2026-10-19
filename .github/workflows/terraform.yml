@@ -33,17 +33,24 @@ jobs:
         with:
           terraform_version: 1.10.5
 
-      - run: terraform init
-      - run: terraform fmt -recursive
-      - run: terraform validate
+      - name: Initialize Terraform
+        run: terraform init
 
-      - name: Create Terraform plan
+      - name: Format Terraform files
+        run: terraform fmt -recursive
+
+      - name: Validate Terraform
+        run: terraform validate
+
+      - name: Create plan
         id: plan
         run: |
           set +e
           terraform plan -detailed-exitcode -out=tfplan
           result=$?
           set -e
+
+          echo "Terraform plan exit code: $result"
 
           if [ "$result" -eq 1 ]; then
             exit 1
@@ -74,10 +81,11 @@ jobs:
         with:
           terraform_version: 1.10.5
 
-      - run: terraform init
+      - name: Initialize Terraform
+        run: terraform init
 
-      - name: Download saved plan from S3
+      - name: Download plan from S3
         run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
 
-      - name: Apply Terraform plan
+      - name: Apply plan
         run: terraform apply -auto-approve tfplan
