@@ -6,9 +6,9 @@ terraform {
     }
   }
   backend "s3" {
-    bucket = "terraform-state-plann"
-    key    = "task3/terraform.tfstate"
-    region = "ap-south-1"
+    bucket       = "terraform-state-plann"
+    key          = "task3/terraform.tfstate"
+    region       = "ap-south-1"
     use_lockfile = true
   }
 }
@@ -61,26 +61,22 @@ resource "aws_s3_bucket" "app" {
   bucket = var.application_bucket_name
 }
 
-resource "aws_iam_role" "ec2" {
-  name = "task3-ec2-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
 resource "aws_instance" "web" {
   ami                         = "ami-04394a3a96907e9ec"
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.web.id]
   associate_public_ip_address = true
+
+  tags = {
+    Name = "task3-web-server"
+  }
 }
 
 output "public_ip" {
   value = aws_instance.web.public_ip
+}
+
+output "application_bucket_name" {
+  value = aws_s3_bucket.app.bucket
 }
