@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: terraform-state
   cancel-in-progress: false
@@ -28,20 +31,33 @@ jobs:
           terraform_version: 1.10.5
 
       - run: terraform init
-      - run: terraform fmt -check
+      - run: terraform fmt -check -recursive
       - run: terraform validate
 
       - name: Create plan
-        run: terraform plan -out=tfplan
+        id: plan
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -out=tfplan
+          result=$?
+          set -e
+
+          if [ "$result" -eq 1 ]; then
+            exit 1
+          elif [ "$result" -eq 2 ]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Save plan to S3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
         run: aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
 
       - name: Download plan from S3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
         run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
 
       - name: Apply plan
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
         run: terraform apply -auto-approve tfplan
