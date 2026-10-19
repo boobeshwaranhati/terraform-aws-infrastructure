@@ -1,0 +1,30 @@
+name: Terraform Plan
+
+on:
+  push:
+    branches: [terraform-changes]
+  pull_request:
+    branches: [main]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      TF_VAR_application_bucket_name: ${{ vars.APPLICATION_BUCKET_NAME }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - run: terraform fmt -check
+
+      - run: terraform init
+
+      - run: terraform validate
+
+      - run: terraform plan
