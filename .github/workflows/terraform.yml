@@ -2,9 +2,12 @@ name: Terraform CI/CD
 
 on:
   push:
-    branches: [terraform-changes, main]
+    branches:
+      - terraform-changes
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -15,6 +18,7 @@ concurrency:
 
 jobs:
   plan:
+    name: Terraform Plan
     runs-on: ubuntu-latest
 
     env:
@@ -27,23 +31,23 @@ jobs:
       changes: ${{ steps.plan.outputs.changes }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
 
-      - name: Initialize Terraform
+      - name: Terraform Init
         run: terraform init
 
-      - name: Format Terraform files
-        run: terraform fmt -recursive
-
-      - name: Validate Terraform
+      - name: Terraform Validate
         run: terraform validate
 
-      - name: Create plan
+      - name: Terraform Plan
         id: plan
+        shell: bash
         run: |
           set +e
           terraform plan -detailed-exitcode -out=tfplan
@@ -60,11 +64,12 @@ jobs:
             echo "changes=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Save plan to S3
+      - name: Save Plan to S3
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
         run: aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
 
   apply:
+    name: Terraform Apply
     needs: plan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.plan.outputs.changes == 'true'
     runs-on: ubuntu-latest
@@ -75,17 +80,19 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
 
-      - name: Initialize Terraform
+      - name: Terraform Init
         run: terraform init
 
-      - name: Download plan from S3
+      - name: Download Plan from S3
         run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
 
-      - name: Apply plan
+      - name: Terraform Apply
         run: terraform apply -auto-approve tfplan

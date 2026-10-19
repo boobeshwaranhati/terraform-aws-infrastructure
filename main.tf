@@ -23,9 +23,7 @@ variable "application_bucket_name" {
 }
 
 resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
+  cidr_block = "10.0.0.0/16"
 }
 
 resource "aws_subnet" "public" {
@@ -89,8 +87,4 @@ resource "aws_instance" "web" {
 
 output "public_ip" {
   value = aws_instance.web.public_ip
-}
-
-output "application_bucket_name" {
-  value = aws_s3_bucket.app.bucket
 }
