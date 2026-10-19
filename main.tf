@@ -10,6 +10,7 @@ terraform {
     bucket       = "terraform-state-plann"
     key          = "task3/terraform.tfstate"
     region       = "ap-south-1"
+    encrypt      = true
     use_lockfile = true
   }
 }
@@ -28,16 +29,28 @@ data "aws_s3_bucket" "app" {
 
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
+
+  tags = {
+    Name = "task3-vpc"
+  }
 }
 
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
+
+  tags = {
+    Name = "task3-public-subnet"
+  }
 }
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "task3-igw"
+  }
 }
 
 resource "aws_route_table" "public" {
@@ -46,6 +59,10 @@ resource "aws_route_table" "public" {
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name = "task3-public-rt"
   }
 }
 
@@ -70,6 +87,10 @@ resource "aws_security_group" "web" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "task3-web-sg"
   }
 }
 
