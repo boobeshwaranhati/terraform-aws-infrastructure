@@ -37,11 +37,17 @@ jobs:
           terraform plan -detailed-exitcode -out=tfplan
           result=$?
           set -e
-          if [ "$result" -eq 1 ]; then exit 1
-          elif [ "$result" -eq 2 ]; then echo "changes=true" >> "$GITHUB_OUTPUT"
-          else echo "changes=false" >> "$GITHUB_OUTPUT"; fi
 
-      - if: github.event_name == 'push' && steps.plan.outputs.changes == 'true'
+          if [ "$result" -eq 1 ]; then
+            exit 1
+          elif [ "$result" -eq 2 ]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save Plan to S3
+        if: github.event_name == 'push' && steps.plan.outputs.changes == 'true'
         run: aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
 
   apply:
@@ -59,6 +65,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
+
       - run: terraform init
       - run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
       - run: terraform apply tfplan
