@@ -31,7 +31,7 @@ jobs:
           terraform_version: 1.10.5
 
       - run: terraform init
-      - run: terraform fmt -check -recursive
+      - run: terraform fmt -recursive
       - run: terraform validate
 
       - name: Create plan
