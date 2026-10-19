@@ -16,6 +16,7 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
+
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -23,19 +24,29 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
-      - run: terraform init
-      - run: terraform fmt -check -recursive
-      - run: terraform validate
-      - run: terraform plan
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan
 
   apply:
     needs: plan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: approval
+
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -43,8 +54,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
-      - run: terraform init
-      - run: terraform apply -auto-approve
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Remove Old S3 Resource from State
+        run: |
+          if terraform state list | grep -Fxq 'aws_s3_bucket.app'; then
+            terraform state rm aws_s3_bucket.app
+          fi
+
+      - name: Terraform Plan
+        run: terraform plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
