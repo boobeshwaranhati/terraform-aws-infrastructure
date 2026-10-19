@@ -18,8 +18,12 @@ provider "aws" {
   region = "ap-south-1"
 }
 
-variable "application_bucket_name" {
-  type = string
+data "aws_iam_role" "ec2" {
+  name = "task3-ec2-s3-role"
+}
+
+data "aws_s3_bucket" "app" {
+  bucket = "terraform-state-plann"
 }
 
 resource "aws_vpc" "main" {
@@ -69,8 +73,9 @@ resource "aws_security_group" "web" {
   }
 }
 
-resource "aws_s3_bucket" "app" {
-  bucket = var.application_bucket_name
+resource "aws_iam_instance_profile" "ec2" {
+  name = "task3-ec2-profile"
+  role = data.aws_iam_role.ec2.name
 }
 
 resource "aws_instance" "web" {
@@ -78,7 +83,9 @@ resource "aws_instance" "web" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.web.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2.name
   associate_public_ip_address = true
+
   tags = {
     Name = "task3-project"
   }
