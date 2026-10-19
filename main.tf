@@ -55,14 +55,12 @@ resource "aws_route_table_association" "public" {
 resource "aws_security_group" "ec2" {
   name   = "task3-ec2-sg"
   vpc_id = aws_vpc.main.id
-
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -117,11 +115,9 @@ resource "aws_instance" "main" {
   vpc_security_group_ids      = [aws_security_group.ec2.id]
   associate_public_ip_address = true
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
-
   metadata_options {
     http_tokens = "required"
   }
-
   root_block_device {
     encrypted = true
   }
