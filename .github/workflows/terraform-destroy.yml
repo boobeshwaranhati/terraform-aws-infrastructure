@@ -2,6 +2,11 @@ name: Terraform Destroy Demo
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: "Type DESTROY to confirm infrastructure deletion"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -12,6 +17,7 @@ concurrency:
 
 jobs:
   destroy:
+    if: github.event.inputs.confirm_destroy == 'DESTROY'
     runs-on: ubuntu-latest
     environment: approval
 
