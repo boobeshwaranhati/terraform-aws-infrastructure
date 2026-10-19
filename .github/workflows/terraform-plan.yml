@@ -1,41 +1,104 @@
-name: Terraform Plan
+name: Terraform CI/CD
 
 on:
   push:
-    branches: [terraform-changes]
+    branches:
+      - terraform-changes
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
-  terraform:
+  plan:
     runs-on: ubuntu-latest
 
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      TF_VAR_application_bucket_name: ${{ vars.APPLICATION_BUCKET_NAME }}
+      TF_VAR_application_bucket_name: ${{ secrets.APPLICATION_BUCKET_NAME }}
+
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
 
-      - run: terraform fmt -check
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
 
-      - run: terraform init
+      - name: Terraform Init
+        run: terraform init
 
-      - run: terraform validate
+      - name: Terraform Validate
+        run: terraform validate
 
-      - name: Create plan
+      - name: Create Terraform Plan
         id: plan
         run: |
+          set +e
           terraform plan -detailed-exitcode -out=tfplan
           result=$?
-          if [ $result -eq 1 ]; then exit 1; fi
-          if [ $result -eq 2 ]; then echo "changes=true" >> "$GITHUB_OUTPUT"; fi
-        continue-on-error: true
+          set -e
 
-      - name: Upload plan to S3
+          if [ "$result" -eq 1 ]; then
+            exit 1
+          elif [ "$result" -eq 2 ]; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Plan to S3
         if: github.event_name == 'push' && steps.plan.outputs.changes == 'true'
-        run: aws s3 cp tfplan s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan
+        run: |
+          aws s3 cp tfplan \
+            "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
+
+  apply:
+    needs: plan
+
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.plan.outputs.changes == 'true'
+
+    runs-on: ubuntu-latest
+
+    environment: production
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Download Plan from S3
+        run: |
+          aws s3 cp \
+            "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" \
+            tfplan
+
+      - name: Apply Saved Plan
+        run: terraform apply tfplan
