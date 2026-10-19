@@ -18,9 +18,7 @@ provider "aws" {
   region = "ap-south-1"
 }
 
-variable "application_bucket_name" {
-  type = string
-}
+variable "application_bucket_name" {}
 
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
@@ -73,12 +71,54 @@ resource "aws_s3_bucket" "app" {
   bucket = var.application_bucket_name
 }
 
+resource "aws_iam_role" "ec2" {
+  name = "task3-ec2-s3-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "s3" {
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.app.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject"]
+        Resource = "${aws_s3_bucket.app.arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "ec2" {
+  role = aws_iam_role.ec2.name
+}
+
 resource "aws_instance" "web" {
   ami                         = "ami-04394a3a96907e9ec"
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.web.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2.name
   associate_public_ip_address = true
+
+  tags = {
+    Name = "task3-project"
+  }
 }
 
 output "public_ip" {
