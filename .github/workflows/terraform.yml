@@ -27,9 +27,6 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       TF_VAR_application_bucket_name: ${{ secrets.APPLICATION_BUCKET_NAME }}
 
-    outputs:
-      changes: ${{ steps.plan.outputs.changes }}
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -46,38 +43,19 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        id: plan
-        shell: bash
-        run: |
-          set +e
-          terraform plan -detailed-exitcode -out=tfplan
-          result=$?
-          set -e
-
-          echo "Terraform plan exit code: $result"
-
-          if [ "$result" -eq 1 ]; then
-            exit 1
-          elif [ "$result" -eq 2 ]; then
-            echo "changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changes=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Save Plan to S3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
-        run: aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
+        run: terraform plan
 
   apply:
     name: Terraform Apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: plan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.plan.outputs.changes == 'true'
     runs-on: ubuntu-latest
 
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
+      TF_VAR_application_bucket_name: ${{ secrets.APPLICATION_BUCKET_NAME }}
 
     steps:
       - name: Checkout Repository
@@ -91,8 +69,5 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Download Plan from S3
-        run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
-
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve
