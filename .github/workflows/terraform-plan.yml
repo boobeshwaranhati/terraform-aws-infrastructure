@@ -27,4 +27,15 @@ jobs:
 
       - run: terraform validate
 
-      - run: terraform plan
+      - name: Create plan
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -out=tfplan
+          result=$?
+          if [ $result -eq 1 ]; then exit 1; fi
+          if [ $result -eq 2 ]; then echo "changes=true" >> "$GITHUB_OUTPUT"; fi
+        continue-on-error: true
+
+      - name: Upload plan to S3
+        if: github.event_name == 'push' && steps.plan.outputs.changes == 'true'
+        run: aws s3 cp tfplan s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan
