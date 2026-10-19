@@ -2,7 +2,7 @@ name: Terraform CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [terraform-changes, main]
   pull_request:
     branches: [main]
 
@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   terraform:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     env:
@@ -31,7 +32,7 @@ jobs:
           terraform_version: 1.10.5
 
       - run: terraform init
-      - run: terraform fmt -recursive
+      - run: terraform fmt -check -recursive
       - run: terraform validate
 
       - name: Create plan
@@ -51,13 +52,13 @@ jobs:
           fi
 
       - name: Save plan to S3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
+        if: steps.plan.outputs.changes == 'true'
         run: aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
 
       - name: Download plan from S3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
+        if: steps.plan.outputs.changes == 'true'
         run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
 
       - name: Apply plan
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.changes == 'true'
+        if: steps.plan.outputs.changes == 'true'
         run: terraform apply -auto-approve tfplan
