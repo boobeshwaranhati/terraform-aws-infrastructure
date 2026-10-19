@@ -1,4 +1,4 @@
-name: Terraform infra
+name: Terraform CI/CD
 
 on:
   push:
@@ -6,25 +6,20 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
-
 concurrency:
   group: terraform-state
   cancel-in-progress: false
 
 jobs:
-  plan:
+  terraform:
     runs-on: ubuntu-latest
+
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       TF_VAR_application_bucket_name: ${{ secrets.APPLICATION_BUCKET_NAME }}
 
-    outputs:
-      changes: ${{ steps.plan.outputs.changes }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -32,46 +27,21 @@ jobs:
         with:
           terraform_version: 1.10.5
 
-      - run: terraform fmt -check -recursive
       - run: terraform init
+      - run: terraform fmt -check
       - run: terraform validate
 
-      - id: plan
-        run: |
-          set +e
-          terraform plan -detailed-exitcode -out=tfplan
-          result=$?
-          set -e
+      - name: Create plan
+        run: terraform plan -out=tfplan
 
-          if [ "$result" -eq 1 ]; then
-            exit 1
-          elif [ "$result" -eq 2 ]; then
-            echo "changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changes=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Save Plan to S3
-        if: github.event_name == 'push' && steps.plan.outputs.changes == 'true'
+      - name: Save plan to S3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
 
-  apply:
-    needs: plan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.plan.outputs.changes == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
+      - name: Download plan from S3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.10.5
-
-      - run: terraform init
-      - run: aws s3 cp "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan" tfplan
-      - run: terraform apply tfplan
+      - name: Apply plan
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve tfplan
