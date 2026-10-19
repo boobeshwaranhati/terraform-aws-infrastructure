@@ -1,6 +1,4 @@
 terraform {
-  required_version = ">= 1.10.0"
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -12,7 +10,6 @@ terraform {
     bucket       = "terraform-state-plann"
     key          = "task3/terraform.tfstate"
     region       = "ap-south-1"
-    encrypt      = true
     use_lockfile = true
   }
 }
@@ -37,7 +34,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 }
 
-resource "aws_internet_gateway" "main" {
+resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 }
 
@@ -46,7 +43,7 @@ resource "aws_route_table" "public" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+    gateway_id = aws_internet_gateway.igw.id
   }
 }
 
@@ -55,8 +52,8 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-resource "aws_security_group" "ec2" {
-  name   = "task3-ec2-sg"
+resource "aws_security_group" "web" {
+  name   = "task3-web-sg"
   vpc_id = aws_vpc.main.id
 
   ingress {
@@ -78,66 +75,22 @@ resource "aws_s3_bucket" "app" {
   bucket = var.application_bucket_name
 }
 
-resource "aws_iam_role" "ec2" {
-  name = "task3-ec2-s3-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "s3" {
-  role = aws_iam_role.ec2.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["s3:ListBucket"]
-        Resource = aws_s3_bucket.app.arn
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject"]
-        Resource = "${aws_s3_bucket.app.arn}/*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_instance_profile" "ec2" {
-  role = aws_iam_role.ec2.name
-}
-
-resource "aws_instance" "main" {
+resource "aws_instance" "web" {
   ami                         = "ami-04394a3a96907e9ec"
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public.id
-  vpc_security_group_ids      = [aws_security_group.ec2.id]
+  vpc_security_group_ids      = [aws_security_group.web.id]
   associate_public_ip_address = true
-  iam_instance_profile        = aws_iam_instance_profile.ec2.name
 
-  metadata_options {
-    http_tokens = "required"
-  }
-
-  root_block_device {
-    encrypted = true
+  tags = {
+    Name = "task3-web-server"
   }
 }
 
-output "ec2_public_ip" {
-  value = aws_instance.main.public_ip
+output "public_ip" {
+  value = aws_instance.web.public_ip
 }
 
-output "application_s3_bucket" {
+output "application_bucket_name" {
   value = aws_s3_bucket.app.bucket
 }
