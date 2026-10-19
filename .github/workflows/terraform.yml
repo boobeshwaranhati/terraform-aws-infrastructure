@@ -27,7 +27,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
@@ -42,10 +41,8 @@ jobs:
           terraform plan -detailed-exitcode -out=tfplan
           result=$?
           set -e
-
-          if [ "$result" -eq 1 ]; then
-            exit 1
-          elif [ "$result" -eq 2 ]; then
+          if [ "$result" -eq 1 ]; then exit 1; fi
+          if [ "$result" -eq 2 ]; then
             echo "changes=true" >> "$GITHUB_OUTPUT"
           else
             echo "changes=false" >> "$GITHUB_OUTPUT"
@@ -55,9 +52,22 @@ jobs:
         if: github.event_name == 'push' && steps.plan.outputs.changes == 'true'
         run: aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
 
+      - name: Keep Existing Plan
+        if: github.event_name == 'push' && steps.plan.outputs.changes == 'false'
+        run: |
+          aws s3 cp "s3://terraform-state-plann/plans/latest.tfplan" tfplan || true
+          if [ -f tfplan ]; then
+            aws s3 cp tfplan "s3://terraform-state-plann/plans/${GITHUB_SHA}.tfplan"
+          fi
+
+      - name: Update Latest Plan
+        if: github.event_name == 'push' && steps.plan.outputs.changes == 'true'
+        run: |
+          aws s3 cp tfplan "s3://terraform-state-plann/plans/latest.tfplan"
+
   apply:
     needs: plan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.plan.outputs.changes == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -67,7 +77,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
