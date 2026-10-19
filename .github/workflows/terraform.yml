@@ -69,5 +69,12 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
+      - name: Import Existing S3 Bucket
+        shell: bash
+        run: |
+          if ! terraform state show aws_s3_bucket.app >/dev/null 2>&1; then
+            terraform import aws_s3_bucket.app "$TF_VAR_application_bucket_name"
+          fi
+
       - name: Terraform Apply
         run: terraform apply -auto-approve
