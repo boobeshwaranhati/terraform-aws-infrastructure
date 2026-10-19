@@ -28,7 +28,7 @@ jobs:
       TF_VAR_application_bucket_name: ${{ secrets.APPLICATION_BUCKET_NAME }}
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Terraform
@@ -47,8 +47,8 @@ jobs:
 
   apply:
     name: Terraform Apply
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     env:
@@ -58,7 +58,7 @@ jobs:
       TF_VAR_application_bucket_name: ${{ secrets.APPLICATION_BUCKET_NAME }}
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Terraform
@@ -68,6 +68,13 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
+
+      - name: Import Existing S3 Bucket
+        shell: bash
+        run: |
+          if ! terraform state show aws_s3_bucket.app >/dev/null 2>&1; then
+            terraform import aws_s3_bucket.app "$TF_VAR_application_bucket_name"
+          fi
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
