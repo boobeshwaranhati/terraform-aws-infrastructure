@@ -12,31 +12,38 @@ permissions:
 jobs:
   plan:
     runs-on: ubuntu-latest
-    env: &aws
+    env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      TF_VAR_application_bucket_name: ${{ secrets.APPLICATION_BUCKET_NAME }}
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
+
       - run: terraform init
+      - run: terraform fmt -check -recursive
+      - run: terraform validate
       - run: terraform plan
 
   apply:
     needs: plan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    env: *aws
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.10.5
+
       - run: terraform init
-      - run: terraform state show aws_s3_bucket.app >/dev/null 2>&1 || terraform import aws_s3_bucket.app "$TF_VAR_application_bucket_name"
       - run: terraform apply -auto-approve
