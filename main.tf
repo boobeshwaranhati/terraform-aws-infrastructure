@@ -1,5 +1,6 @@
-```hcl
 terraform {
+  required_version = ">= 1.10.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -61,7 +62,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "task3-public-route-table"
+    Name = "task3-public-rt"
   }
 }
 
@@ -182,4 +183,3 @@ output "ec2_public_ip" {
 output "application_s3_bucket" {
   value = aws_s3_bucket.app.bucket
 }
-```
