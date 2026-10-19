@@ -79,6 +79,9 @@ resource "aws_instance" "web" {
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.web.id]
   associate_public_ip_address = true
+  tags = {
+    Name = "task3-project"
+  }
 }
 
 output "public_ip" {
